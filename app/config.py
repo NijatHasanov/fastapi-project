@@ -3,12 +3,14 @@ from typing import List
 import json
 
 class Settings(BaseSettings):
-    # Database settings
+    # Database settings (granular)
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
     DB_USER: str = "postgres"
     DB_PASSWORD: str = "postgres"
     DB_NAME: str = "fastapi_db"
+    # Legacy single URL (optional, if set overrides granular parts)
+    DB_URL: str | None = None
     
     # Security settings
     JWT_SECRET: str
@@ -25,8 +27,15 @@ class Settings(BaseSettings):
     
     @property
     def DATABASE_URL(self) -> str:
-        """Get AsyncPG database URL from environment variables."""
+        """Construct database URL unless legacy DB_URL provided."""
+        if self.DB_URL:
+            return self.DB_URL
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    # Backwards compatibility accessor
+    @property
+    def effective_db_url(self) -> str:  # alias if other code imported differently
+        return self.DATABASE_URL
     
     @property
     def CORS_ORIGIN_LIST(self) -> List[str]:

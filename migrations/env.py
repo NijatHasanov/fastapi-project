@@ -1,9 +1,9 @@
 from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-
+from sqlalchemy.engine import Connection
+from sqlalchemy import create_engine
 from alembic import context
+from app.config import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -15,10 +15,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
-from app.models.user import User
-from app.models.room import RoomData
+from app.models.user import User  # noqa: F401
+from app.models.room import RoomData  # noqa: F401
 from app.database import Base
-
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -39,8 +38,8 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    from app.config import settings
-url = settings.DATABASE_URL
+    # Use sync URL for migrations
+    url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -59,17 +58,12 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
+    # Use sync URL for migrations
+    db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    
+    connectable = create_engine(db_url, poolclass=pool.NullPool, future=True)
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
-
+        context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
             context.run_migrations()
 

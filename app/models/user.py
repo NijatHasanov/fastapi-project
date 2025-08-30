@@ -5,8 +5,11 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.config import settings
-from sqlalchemy import Column, Integer, String, DateTime
+from app.database import Base
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
