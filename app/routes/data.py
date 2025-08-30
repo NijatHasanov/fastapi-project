@@ -1,33 +1,45 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
-from app.models.room import RoomData
-from app.models.user import get_current_user, User
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.sql import desc
+from app.models.room import RoomData, RoomDataCreate, RoomDataResponse
+from app.models.user import User, get_current_user
+from app.database import get_db
+from app.auth.permissions import Permission, has_permission
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1")
 
-# Temporary in-memory storage
-room_data_storage = []
-
-@router.post("/data", response_model=RoomData)
+@router.post("/data", response_model=RoomDataResponse)
 async def create_room_data(
-    data: RoomData,
-    current_user: User = Depends(get_current_user)
+    data: RoomDataCreate,
+    current_user: User = Depends(has_permission([Permission.CREATE_ROOM_DATA])),
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Create new room data
-    Requires authentication and admin role
+    Store room data in PostgreSQL database
+    Requires create_room_data permission (admin role)
     """
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
-    room_data_storage.append(data)
-    return data
+    db_data = RoomData(**data.dict())
+    db.add(db_data)
+    await db.commit()
+    await db.refresh(db_data)
+    return db_data
 
-@router.get("/data/all", response_model=List[RoomData])
-async def get_all_room_data(
-    current_user: User = Depends(get_current_user)
+@router.get("/room/{room_id}/latest", response_model=RoomDataResponse)
+async def get_latest_room_data(
+    room_id: str,
+    current_user: User = Depends(has_permission([Permission.READ_ROOM_DATA])),
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Get all room data
-    Requires authentication (both admin and viewer roles allowed)
+    Get the most recent data for a specific room
+    Requires read_room_data permission (admin or viewer role)
     """
-    return room_data_storage
+    query = select(RoomData).filter(RoomData.room_id == room_id).order_by(desc(RoomData.timestamp)).limit(1)
+    result = await db.execute(query)
+    data = result.scalar_one_or_none()
+    
+    if not data:
+        raise HTTPException(status_code=404, detail=f"No data found for room {room_id}")
+    
+    return data
