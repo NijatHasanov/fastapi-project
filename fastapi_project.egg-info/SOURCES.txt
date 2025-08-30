@@ -1,0 +1,8 @@
+README.md
+setup.py
+fastapi_project.egg-info/PKG-INFO
+fastapi_project.egg-info/SOURCES.txt
+fastapi_project.egg-info/dependency_links.txt
+fastapi_project.egg-info/top_level.txt
+tests/test_config.py
+tests/test_root.py
