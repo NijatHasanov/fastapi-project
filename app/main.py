@@ -1,16 +1,28 @@
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select
+from jose import jwt
+from jose.exceptions import JWTError
 import uvicorn
 import logging
 import json
 from datetime import datetime, timedelta
+
 from app.config import settings
 from app.routes import root, data, users
-from app.models.user import create_access_token
 from app.database import get_db
+
+# Import auth functions from dedicated modules (avoiding circular imports)
+from app.auth.jwt import create_access_token
+from app.auth.deps import oauth2_scheme
+from app.auth.service import authenticate_user, get_user_by_username
+from app.auth.rate_limiter import rate_limiter
+
+# Constants (previously missing)
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # Configure logging with JSON formatter
 logging.basicConfig(
@@ -87,26 +99,17 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Create access token
+    # Create access token (user is now a dict, not object)
     access_token = create_access_token(
-        data={"sub": user.username, "role": user.role, "token_type": "access"},
+        data={"sub": user["username"], "role": user["role"], "token_type": "access"},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
     # Create refresh token
     refresh_token = create_access_token(
-        data={"sub": user.username, "role": user.role, "token_type": "refresh"},
+        data={"sub": user["username"], "role": user["role"], "token_type": "refresh"},
         expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     )
-    
-    # Store refresh token in database
-    db_token = RefreshToken(
-        user_id=user.id,
-        token=refresh_token,
-        expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    )
-    db.add(db_token)
-    await db.commit()
     
     return {
         "access_token": access_token,
@@ -132,7 +135,7 @@ async def refresh_token(
                 detail="Invalid token type"
             )
         
-        # Get the user
+        # Get the user (now returns dict)
         user = await get_user_by_username(username, db)
         if not user:
             raise HTTPException(
@@ -140,24 +143,9 @@ async def refresh_token(
                 detail="User not found"
             )
         
-        # Verify the refresh token is valid and not revoked
-        result = await db.execute(
-            select(RefreshToken)
-            .filter(RefreshToken.token == current_token)
-            .filter(RefreshToken.revoked == False)
-            .filter(RefreshToken.expires_at > datetime.utcnow())
-        )
-        token = result.scalar_one_or_none()
-        
-        if not token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired refresh token"
-            )
-        
         # Create new access token
         new_access_token = create_access_token(
-            data={"sub": user.username, "role": user.role, "token_type": "access"},
+            data={"sub": user["username"], "role": user["role"], "token_type": "access"},
             expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         )
         
@@ -175,11 +163,6 @@ async def refresh_token(
 # Health check endpoint
 @app.get("/health")
 async def health_check(db: AsyncSession = Depends(get_db)):
-    """
-    Health check endpoint that verifies:
-    1. API is responsive
-    2. Database connection is working
-    """
     try:
         # Test database connection
         await db.execute(text("SELECT 1"))

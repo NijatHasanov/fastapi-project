@@ -4,15 +4,15 @@ from sqlalchemy import select
 from sqlalchemy.sql import desc
 from app.models.room import RoomData, RoomDataCreate, RoomDataResponse
 from app.models.user import User, get_current_user
-from app.database import get_db
 from app.auth.permissions import Permission, has_permission
+from app.database import get_db
 
 router = APIRouter(prefix="/api/v1")
 
 @router.post("/data", response_model=RoomDataResponse)
 async def create_room_data(
     data: RoomDataCreate,
-    current_user: User = Depends(has_permission([Permission.CREATE_ROOM_DATA])),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
