@@ -16,3 +16,11 @@ Thumbs.db
 
 # Docker
 postgres_data/
+
+# Node
+node_modules/
+dist/
+build/
+*.log
+*.cache
+.pnpm-store/
