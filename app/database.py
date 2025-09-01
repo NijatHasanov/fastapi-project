@@ -1,22 +1,22 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-from app.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.orm import declarative_base
+from typing import AsyncGenerator
+import os
 
-"""Database initialization module.
+# Database URL - you can change this to match your database
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./hotel_energy.db")
 
-Uses async SQLAlchemy engine pointing at the configured DATABASE_URL. Previous
-code referenced settings.DB_URL which no longer exists after the refactor to
-granular DB_* env vars; this updates to use settings.DATABASE_URL property.
-"""
-
-engine = create_async_engine(settings.DATABASE_URL, future=True)
-async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+engine = create_async_engine(DATABASE_URL, echo=True)
+async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
-async def get_db():
-    """FastAPI dependency providing an async DB session."""
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session() as session:
         try:
             yield session
         finally:
             await session.close()
+
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

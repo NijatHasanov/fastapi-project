@@ -1,7 +1,7 @@
 from enum import Enum
-from typing import List
-from fastapi import HTTPException, status, Depends
-from app.models.user import User, get_current_user
+from fastapi import Depends, HTTPException, status
+from typing import List, Dict, Optional, Union, Any
+from ..models.user import get_current_user, User
 
 
 class Permission(Enum):
@@ -24,31 +24,15 @@ class Permission(Enum):
     DELETE_ROOM_DATA = "delete_room_data"
 
 
-def has_permission(required_permissions: List[Permission]):
+def has_permission(required_permissions: list[Permission]):
     """Dependency function to check if user has required permissions"""
-    def permission_checker(user: User = Depends(get_current_user)) -> User:
-        if not user:
+    def permission_checker(current_user: User = Depends(get_current_user)):
+        if current_user.role != "admin":
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
             )
-        
-        # Admin role has all permissions
-        if user.role == "admin":
-            return user
-        
-        # Check specific permissions for regular users
-        user_permissions = get_user_permissions(user)
-        
-        for required_permission in required_permissions:
-            if required_permission not in user_permissions:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Permission denied: {required_permission.value} required"
-                )
-        
-        return user
-    
+        return current_user
     return permission_checker
 
 
