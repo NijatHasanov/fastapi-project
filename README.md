@@ -1,4 +1,4 @@
-# EnergyIoT 🏨⚡
+EnergyIoT
 
 **AI-Powered Hotel Energy Optimization Platform** - Reduce energy costs by up to 30% with intelligent automation and real-time insights.
 
